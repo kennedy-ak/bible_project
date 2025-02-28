@@ -1,0 +1,9 @@
+flask
+groq
+langchain-community
+langchain-pinecone
+langchain-core
+pinecone-client
+sentence-transformers
+python-dotenv
+gunicorn

@@ -1,0 +1,265 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bible Verses Explorer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .chat-box {
+            height: 60vh;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            background-color: white;
+            margin-bottom: 20px;
+        }
+        .message-user {
+            background-color: #e9f5ff;
+            border-radius: 15px 15px 0 15px;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            max-width: 80%;
+            margin-left: auto;
+        }
+        .message-assistant {
+            background-color: #f0f0f0;
+            border-radius: 15px 15px 15px 0;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            max-width: 80%;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #007bff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .app-title {
+            color: #3a5a99;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .scripture-reference {
+            font-weight: bold;
+            color: #3a5a99;
+        }
+        .action-btn {
+            margin-top: 10px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="chat-container">
+            <h1 class="app-title">Bible Verses Explorer</h1>
+            <p class="lead text-center mb-4">Ask for scriptures on any topic or theme!</p>
+            
+            <div class="chat-box" id="chatBox">
+                {% for message in chat_history %}
+                    <div class="d-flex justify-content-end mb-2">
+                        <div class="message-user">
+                            {{ message.content }}
+                        </div>
+                    </div>
+                    <div class="d-flex mb-3">
+                        <div class="message-assistant">
+                            {{ message.response | safe }}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <form id="queryForm" class="mb-3">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="queryInput" placeholder="Ask for scriptures on a topic..." required>
+                    <button type="submit" class="btn btn-primary">
+                        <span id="submitButton">Send</span>
+                        <span id="loadingIndicator" class="loading d-none"></span>
+                    </button>
+                </div>
+            </form>
+            
+            <div class="action-buttons text-center mb-4">
+                <button id="moreVersesBtn" class="btn btn-outline-primary action-btn d-none">Show more verses</button>
+                <button id="explainTopicBtn" class="btn btn-outline-secondary action-btn d-none">Tell me more about <span id="currentTopic"></span></button>
+                <button id="clearHistoryBtn" class="btn btn-outline-danger action-btn">Clear History</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatBox = document.getElementById('chatBox');
+            const queryForm = document.getElementById('queryForm');
+            const queryInput = document.getElementById('queryInput');
+            const submitButton = document.getElementById('submitButton');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const moreVersesBtn = document.getElementById('moreVersesBtn');
+            const explainTopicBtn = document.getElementById('explainTopicBtn');
+            const currentTopic = document.getElementById('currentTopic');
+            const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+            
+            // Scroll to bottom of chat
+            function scrollToBottom() {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+            
+            // Add a message to the chat
+            function addMessage(content, isUser) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = isUser ? 'd-flex justify-content-end mb-2' : 'd-flex mb-3';
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = isUser ? 'message-user' : 'message-assistant';
+                messageContent.innerHTML = content;
+                
+                messageDiv.appendChild(messageContent);
+                chatBox.appendChild(messageDiv);
+                scrollToBottom();
+            }
+            
+            // Format scriptures with highlighted references
+            function formatScriptures(text) {
+                // Find and highlight scripture references
+                return text.replace(/([1-3]?[A-Z][a-z]+ \d+:\d+(?:-\d+)?)/g, '<span class="scripture-reference">$1</span>');
+            }
+            
+            // Process user query
+            queryForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const query = queryInput.value.trim();
+                if (!query) return;
+                
+                // Display user message
+                addMessage(query, true);
+                
+                // Show loading indicator
+                submitButton.classList.add('d-none');
+                loadingIndicator.classList.remove('d-none');
+                moreVersesBtn.classList.add('d-none');
+                explainTopicBtn.classList.add('d-none');
+                
+                // Send query to server
+                fetch('/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `query=${encodeURIComponent(query)}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Format and display assistant message
+                    const formattedResponse = formatScriptures(data.response);
+                    addMessage(formattedResponse, false);
+                    
+                    // Update topic and show action buttons
+                    currentTopic.textContent = data.topic;
+                    moreVersesBtn.classList.remove('d-none');
+                    explainTopicBtn.classList.remove('d-none');
+                    
+                    // Reset form
+                    queryInput.value = '';
+                    submitButton.classList.remove('d-none');
+                    loadingIndicator.classList.add('d-none');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    addMessage('Sorry, there was an error processing your request.', false);
+                    submitButton.classList.remove('d-none');
+                    loadingIndicator.classList.add('d-none');
+                });
+            });
+            
+            // Get more verses
+            moreVersesBtn.addEventListener('click', function() {
+                moreVersesBtn.disabled = true;
+                moreVersesBtn.innerHTML = '<span class="loading"></span> Loading...';
+                
+                fetch('/more-verses', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const formattedResponse = formatScriptures(data.response);
+                    addMessage(`Show more verses about ${currentTopic.textContent}`, true);
+                    addMessage(formattedResponse, false);
+                    moreVersesBtn.disabled = false;
+                    moreVersesBtn.innerHTML = 'Show more verses';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    addMessage('Sorry, there was an error getting more verses.', false);
+                    moreVersesBtn.disabled = false;
+                    moreVersesBtn.innerHTML = 'Show more verses';
+                });
+            });
+            
+            // Explain topic
+            explainTopicBtn.addEventListener('click', function() {
+                explainTopicBtn.disabled = true;
+                explainTopicBtn.innerHTML = '<span class="loading"></span> Loading...';
+                
+                fetch('/explain-topic', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const formattedResponse = formatScriptures(data.response);
+                    addMessage(`Tell me more about ${currentTopic.textContent}`, true);
+                    addMessage(formattedResponse, false);
+                    explainTopicBtn.disabled = false;
+                    explainTopicBtn.innerHTML = `Tell me more about ${currentTopic.textContent}`;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    addMessage('Sorry, there was an error explaining this topic.', false);
+                    explainTopicBtn.disabled = false;
+                    explainTopicBtn.innerHTML = `Tell me more about ${currentTopic.textContent}`;
+                });
+            });
+            
+            // Clear history
+            clearHistoryBtn.addEventListener('click', function() {
+                fetch('/clear-history', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    chatBox.innerHTML = '';
+                    moreVersesBtn.classList.add('d-none');
+                    explainTopicBtn.classList.add('d-none');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+            });
+            
+            // Initial scroll to bottom
+            scrollToBottom();
+        });
+    </script>
+</body>
+</html>
