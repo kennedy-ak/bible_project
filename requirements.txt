@@ -7,3 +7,4 @@ pinecone-client
 sentence-transformers
 python-dotenv
 gunicorn
+langchain_huggingface
